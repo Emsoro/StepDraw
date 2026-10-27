@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StepDraw 画板</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app">
+        <header id="topbar">
+            <div class="brand">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect x="1.5" y="1.5" width="21" height="21" rx="5.5" fill="#3b82f6"/>
+                    <path d="M6.5 16.5 L14 9 L16.5 11.5 L9 19 H6.5 Z" fill="#fff"/>
+                    <path d="M14 9 L16 7 L18.5 9.5 L16.5 11.5 Z" fill="#ffd166"/>
+                </svg>
+                <span>StepDraw</span>
+            </div>
+            <nav class="menu">
+                <button id="mNew">新建</button>
+                <button id="mOpen">打开</button>
+                <button id="mSave">保存</button>
+                <button id="mSaveAs">另存为</button>
+                <button id="mExport">导出 PNG</button>
+                <span class="msep"></span>
+                <button id="mUndo" title="Ctrl+Z">撤销</button>
+                <button id="mRedo" title="Ctrl+Shift+Z">重做</button>
+            </nav>
+            <div class="filename" id="fileName">未命名</div>
+            <div class="spacer"></div>
+            <span class="badge" id="envBadge">浏览器预览</span>
+        </header>
+
+        <div id="main">
+            <aside id="toolbar">
+                <button class="tbtn" data-tool="select" title="选择 V">
+                    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+                        <path d="M5 3 L15.5 8.6 L10.8 10 L9.4 14.8 Z"/>
+                    </svg><span class="kbd">V</span>
+                </button>
+                <button class="tbtn" data-tool="hand" title="手型（平移） H">
+                    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10 2.5v15M2.5 10h15M10 2.5 7.8 4.7M10 2.5l2.2 2.2M10 17.5l-2.2-2.2M10 17.5l2.2-2.2M2.5 10l2.2-2.2M2.5 10l2.2 2.2M17.5 10l-2.2-2.2M17.5 10l-2.2 2.2"/>
+                    </svg><span class="kbd">H</span>
+                </button>
+                <span class="tsep"></span>
+                <button class="tbtn" data-tool="pencil" title="铅笔（自由绘制） D">
+                    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+                        <path d="M4 16.2 L13.5 6.7 L16.3 9.5 L6.8 19 H4 Z"/>
+                        <path d="M13.5 6.7 L15.4 4.8 a1.3 1.3 0 0 1 1.9 0 l0.4 0.4 a1.3 1.3 0 0 1 0 1.9 L15.8 9"/>
+                    </svg><span class="kbd">D</span>
+                </button>
+                <button class="tbtn" data-tool="eraser" title="橡皮 E">
+                    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+                        <path d="M7.5 15.5 L3.8 11.8 a1.5 1.5 0 0 1 0-2.1 L10.5 3 a1.5 1.5 0 0 1 2.1 0 l3.9 3.9 a1.5 1.5 0 0 1 0 2.1 L9.6 15.9 H7.5 Z"/>
+                        <path d="M7 8.5 L11.5 13"/>
+                        <path d="M4 17.5 H16"/>
+                    </svg><span class="kbd">E</span>
+                </button>
+                <span class="tsep"></span>
+                <button class="tbtn" data-tool="rect" title="矩形 R">
+                    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+                        <rect x="3.5" y="5" width="13" height="10" rx="1.5"/>
+                    </svg><span class="kbd">R</span>
+                </button>
+                <button class="tbtn" data-tool="ellipse" title="椭圆 O">
+                    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+                        <ellipse cx="10" cy="10" rx="6.8" ry="5.2"/>
+                    </svg><span class="kbd">O</span>
+                </button>
+                <button class="tbtn" data-tool="diamond" title="菱形（判断） F">
+                    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+                        <path d="M10 3 L17 10 L10 17 L3 10 Z"/>
+                    </svg><span class="kbd">F</span>
+                </button>
+                <button class="tbtn" data-tool="arrow" title="箭头（连接图形） A">
+                    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 16 L15.5 4.5"/>
+                        <path d="M9 4.5 H15.5 V11"/>
+                    </svg><span class="kbd">A</span>
+                </button>
+                <span class="tsep"></span>
+                <button class="tbtn" data-tool="text" title="文本 T">
+                    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+                        <path d="M4.5 4.5 H15.5 M10 4.5 V16"/>
+                    </svg><span class="kbd">T</span>
+                </button>
+            </aside>
+
+            <div id="canvasWrap">
+                <canvas id="canvas"></canvas>
+                <textarea id="editor" spellcheck="false"></textarea>
+                <div id="zoombar">
+                    <button id="zoomOut" title="缩小">−</button>
+                    <button id="zoomPct" title="重置为 100%">100%</button>
+                    <button id="zoomIn" title="放大">+</button>
+                    <span class="zsep"></span>
+                    <button id="zoomFit" title="适应全部内容 (Shift+1)">适应</button>
+                </div>
+                <div id="hintbar"></div>
+            </div>
+
+            <aside id="stylebar">
+                <div class="sec">
+                    <div class="sec-title">描边颜色</div>
+                    <div class="swatches" id="strokeColors" data-key="stroke"></div>
+                </div>
+                <div class="sec">
+                    <div class="sec-title">填充颜色</div>
+                    <div class="swatches" id="fillColors" data-key="fill"></div>
+                </div>
+                <div class="sec">
+                    <div class="sec-title">线宽</div>
+                    <div class="seg" id="segSize"></div>
+                </div>
+                <div class="sec">
+                    <div class="sec-title">线型</div>
+                    <div class="seg" id="segDash"></div>
+                </div>
+                <div class="sec">
+                    <div class="sec-title">字号</div>
+                    <div class="seg" id="segFont"></div>
+                </div>
+                <div class="sec" id="routeSec">
+                    <div class="sec-title">箭头样式</div>
+                    <div class="seg" id="segRoute"></div>
+                </div>
+                <div class="sec sec-actions">
+                    <button id="btnDup" class="action">复制选中 (Ctrl+D)</button>
+                    <button id="btnDelete" class="danger">删除选中 (Del)</button>
+                </div>
+            </aside>
+        </div>
+    </div>
+    <div id="toast"></div>
+
+    <script src="js/bridge.js"></script>
+    <script src="js/geometry.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/render.js"></script>
+    <script src="js/tools.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

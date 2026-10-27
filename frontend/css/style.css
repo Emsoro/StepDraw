@@ -1,0 +1,305 @@
+/* StepDraw —— 深色工作台 + 浅色画布 */
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    background: #151823;
+    color: #e8eaf2;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+#app { display: flex; flex-direction: column; height: 100%; }
+
+button {
+    font-family: inherit;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+/* ---------- 顶栏 ---------- */
+#topbar {
+    height: 48px;
+    flex: 0 0 48px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 14px;
+    background: #181c2a;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+}
+
+.menu { display: flex; align-items: center; gap: 2px; }
+
+.menu button {
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #b6bad0;
+}
+
+.menu button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.07); color: #fff; }
+.menu button:disabled { opacity: 0.35; cursor: default; }
+
+.msep {
+    width: 1px;
+    height: 18px;
+    margin: 0 6px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.filename {
+    font-size: 12px;
+    color: #8a90a5;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    padding: 3px 10px;
+    border-radius: 999px;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.spacer { flex: 1; }
+
+.badge {
+    display: none;
+    font-size: 11px;
+    color: #ffd166;
+    border: 1px solid rgba(255, 209, 102, 0.35);
+    background: rgba(255, 209, 102, 0.08);
+    padding: 3px 9px;
+    border-radius: 999px;
+}
+
+/* ---------- 主区 ---------- */
+#main { flex: 1; display: flex; min-height: 0; }
+
+/* 工具栏 */
+#toolbar {
+    width: 52px;
+    flex: 0 0 52px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 0;
+    gap: 4px;
+    background: #181c2a;
+    border-right: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.tbtn {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    color: #9aa0b4;
+    position: relative;
+}
+
+.tbtn:hover { background: rgba(255, 255, 255, 0.06); color: #e8eaf2; }
+.tbtn.active { background: #3b82f6; color: #fff; }
+
+.tbtn .kbd {
+    position: absolute;
+    bottom: 1px;
+    right: 4px;
+    font-size: 8px;
+    line-height: 1;
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.tsep { width: 26px; height: 1px; margin: 6px 0; background: rgba(255, 255, 255, 0.09); }
+
+/* 画布区 */
+#canvasWrap {
+    flex: 1;
+    position: relative;
+    background: #f7f8fb;
+    overflow: hidden;
+}
+
+#canvas {
+    display: block;
+    position: absolute;
+    inset: 0;
+    touch-action: none;
+}
+
+#editor {
+    display: none;
+    position: absolute;
+    background: rgba(255, 255, 255, 0.88);
+    border: 1.5px dashed #3b82f6;
+    outline: none;
+    resize: none;
+    padding: 0 6px;
+    margin: 0;
+    border-radius: 4px;
+    overflow: hidden;
+    white-space: pre-wrap;
+    word-break: break-all;
+    user-select: text;
+    -webkit-user-select: text;
+    box-shadow: 0 4px 18px rgba(30, 41, 80, 0.12);
+}
+
+/* 缩放条 */
+#zoombar {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: rgba(24, 28, 42, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 4px;
+}
+
+#zoombar button {
+    min-width: 30px;
+    height: 26px;
+    padding: 0 8px;
+    border-radius: 7px;
+    color: #c6cade;
+    font-size: 12px;
+}
+
+#zoombar button:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+#zoomPct { min-width: 52px; }
+.zsep { width: 1px; height: 16px; margin: 0 3px; background: rgba(255, 255, 255, 0.1); }
+
+/* 提示条 */
+#hintbar {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    max-width: 52%;
+    font-size: 12px;
+    color: #6d7488;
+    background: rgba(24, 28, 42, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 6px 11px;
+    border-radius: 8px;
+    pointer-events: none;
+}
+
+/* 样式面板 */
+#stylebar {
+    width: 196px;
+    flex: 0 0 196px;
+    background: #181c2a;
+    border-left: 1px solid rgba(255, 255, 255, 0.07);
+    padding: 14px 12px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.sec-title {
+    font-size: 11px;
+    color: #8a90a5;
+    margin-bottom: 7px;
+    letter-spacing: 0.06em;
+}
+
+.swatches {
+    display: grid;
+    grid-template-columns: repeat(9, 18px);
+    gap: 4px;
+}
+
+.sw {
+    width: 18px;
+    height: 18px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    position: relative;
+}
+
+.sw:hover { transform: scale(1.12); }
+
+.sw.active {
+    outline: 2px solid #3b82f6;
+    outline-offset: 1.5px;
+}
+
+.sw.transparent {
+    background:
+        linear-gradient(135deg, transparent 44%, #e5484d 46%, #e5484d 54%, transparent 56%),
+        #2a2f42;
+}
+
+.seg {
+    display: flex;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 2px;
+    gap: 2px;
+}
+
+.seg button {
+    flex: 1;
+    padding: 5px 0;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #9aa0b4;
+}
+
+.seg button:hover { color: #e8eaf2; }
+.seg button.active { background: #3b82f6; color: #fff; }
+
+.sec-actions { gap: 8px; display: flex; flex-direction: column; }
+
+.action, .danger {
+    width: 100%;
+    padding: 7px 0;
+    border-radius: 8px;
+    font-size: 12.5px;
+}
+
+.action { background: rgba(255, 255, 255, 0.06); color: #c6cade; }
+.action:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+
+.danger { background: rgba(229, 72, 77, 0.14); color: #ff9a9d; }
+.danger:hover { background: rgba(229, 72, 77, 0.24); }
+
+/* Toast */
+#toast {
+    position: fixed;
+    left: 50%;
+    bottom: 30px;
+    transform: translateX(-50%) translateY(16px);
+    background: #0f1320;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e8eaf2;
+    padding: 8px 18px;
+    border-radius: 10px;
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 0.25s, transform 0.25s;
+    pointer-events: none;
+    z-index: 99;
+}
+
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
