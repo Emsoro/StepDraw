@@ -10,3 +10,6 @@ stepdraw_error_log.txt
 # 系统文件
 Thumbs.db
 .DS_Store
+
+# IDE 产物
+.trae-html-share-packages/
