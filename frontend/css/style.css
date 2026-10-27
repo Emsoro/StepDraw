@@ -1,4 +1,4 @@
-/* StepDraw —— 深色工作台 + 浅色画布 */
+/* StepDraw —— 浅色工作台 + 浅色画布（马卡龙配色） */
 * { box-sizing: border-box; }
 
 html, body {
@@ -6,8 +6,8 @@ html, body {
     height: 100%;
     overflow: hidden;
     font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
-    background: #151823;
-    color: #e8eaf2;
+    background: #f7f8fb;
+    color: #1f2329;
     user-select: none;
     -webkit-user-select: none;
 }
@@ -30,8 +30,8 @@ button {
     align-items: center;
     gap: 14px;
     padding: 0 14px;
-    background: #181c2a;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    background: #ffffff;
+    border-bottom: 1px solid #e6e8ee;
 }
 
 .brand {
@@ -49,24 +49,24 @@ button {
     padding: 5px 10px;
     border-radius: 8px;
     font-size: 13px;
-    color: #b6bad0;
+    color: #5c6470;
 }
 
-.menu button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.07); color: #fff; }
+.menu button:hover:not(:disabled) { background: rgba(31, 35, 41, 0.06); color: #1f2329; }
 .menu button:disabled { opacity: 0.35; cursor: default; }
 
 .msep {
     width: 1px;
     height: 18px;
     margin: 0 6px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(31, 35, 41, 0.12);
 }
 
 .filename {
     font-size: 12px;
-    color: #8a90a5;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    color: #6b7280;
+    background: #f2f4f7;
+    border: 1px solid #e6e8ee;
     padding: 3px 10px;
     border-radius: 999px;
     max-width: 260px;
@@ -80,9 +80,9 @@ button {
 .badge {
     display: none;
     font-size: 11px;
-    color: #ffd166;
-    border: 1px solid rgba(255, 209, 102, 0.35);
-    background: rgba(255, 209, 102, 0.08);
+    color: #b45309;
+    border: 1px solid rgba(180, 83, 9, 0.3);
+    background: rgba(245, 158, 11, 0.08);
     padding: 3px 9px;
     border-radius: 999px;
 }
@@ -99,8 +99,8 @@ button {
     align-items: center;
     padding: 10px 0;
     gap: 4px;
-    background: #181c2a;
-    border-right: 1px solid rgba(255, 255, 255, 0.07);
+    background: #ffffff;
+    border-right: 1px solid #e6e8ee;
 }
 
 .tbtn {
@@ -109,11 +109,11 @@ button {
     border-radius: 10px;
     display: grid;
     place-items: center;
-    color: #9aa0b4;
+    color: #7a8291;
     position: relative;
 }
 
-.tbtn:hover { background: rgba(255, 255, 255, 0.06); color: #e8eaf2; }
+.tbtn:hover { background: rgba(31, 35, 41, 0.06); color: #1f2329; }
 .tbtn.active { background: #3b82f6; color: #fff; }
 
 .tbtn .kbd {
@@ -126,7 +126,7 @@ button {
     pointer-events: none;
 }
 
-.tsep { width: 26px; height: 1px; margin: 6px 0; background: rgba(255, 255, 255, 0.09); }
+.tsep { width: 26px; height: 1px; margin: 6px 0; background: rgba(31, 35, 41, 0.1); }
 
 /* 画布区 */
 #canvasWrap {
@@ -146,7 +146,7 @@ button {
 #editor {
     display: none;
     position: absolute;
-    background: rgba(255, 255, 255, 0.88);
+    background: rgba(255, 255, 255, 0.9);
     border: 1.5px dashed #3b82f6;
     outline: none;
     resize: none;
@@ -169,10 +169,11 @@ button {
     display: flex;
     align-items: center;
     gap: 2px;
-    background: rgba(24, 28, 42, 0.92);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid #e6e8ee;
     border-radius: 10px;
     padding: 4px;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
 }
 
 #zoombar button {
@@ -180,13 +181,13 @@ button {
     height: 26px;
     padding: 0 8px;
     border-radius: 7px;
-    color: #c6cade;
+    color: #5c6470;
     font-size: 12px;
 }
 
-#zoombar button:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+#zoombar button:hover { background: rgba(31, 35, 41, 0.06); color: #1f2329; }
 #zoomPct { min-width: 52px; }
-.zsep { width: 1px; height: 16px; margin: 0 3px; background: rgba(255, 255, 255, 0.1); }
+.zsep { width: 1px; height: 16px; margin: 0 3px; background: rgba(31, 35, 41, 0.12); }
 
 /* 提示条 */
 #hintbar {
@@ -195,20 +196,21 @@ button {
     bottom: 12px;
     max-width: 52%;
     font-size: 12px;
-    color: #6d7488;
-    background: rgba(24, 28, 42, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: #8a90a0;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid #e6e8ee;
     padding: 6px 11px;
     border-radius: 8px;
     pointer-events: none;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
 }
 
 /* 样式面板 */
 #stylebar {
     width: 196px;
     flex: 0 0 196px;
-    background: #181c2a;
-    border-left: 1px solid rgba(255, 255, 255, 0.07);
+    background: #ffffff;
+    border-left: 1px solid #e6e8ee;
     padding: 14px 12px;
     overflow-y: auto;
     display: flex;
@@ -218,7 +220,7 @@ button {
 
 .sec-title {
     font-size: 11px;
-    color: #8a90a5;
+    color: #8a90a0;
     margin-bottom: 7px;
     letter-spacing: 0.06em;
 }
@@ -233,7 +235,7 @@ button {
     width: 18px;
     height: 18px;
     border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(31, 35, 41, 0.14);
     position: relative;
 }
 
@@ -247,12 +249,12 @@ button {
 .sw.transparent {
     background:
         linear-gradient(135deg, transparent 44%, #e5484d 46%, #e5484d 54%, transparent 56%),
-        #2a2f42;
+        #eef1f5;
 }
 
 .seg {
     display: flex;
-    background: rgba(255, 255, 255, 0.05);
+    background: #f2f4f7;
     border-radius: 8px;
     padding: 2px;
     gap: 2px;
@@ -263,10 +265,10 @@ button {
     padding: 5px 0;
     border-radius: 6px;
     font-size: 12px;
-    color: #9aa0b4;
+    color: #5c6470;
 }
 
-.seg button:hover { color: #e8eaf2; }
+.seg button:hover { color: #1f2329; }
 .seg button.active { background: #3b82f6; color: #fff; }
 
 .sec-actions { gap: 8px; display: flex; flex-direction: column; }
@@ -278,11 +280,11 @@ button {
     font-size: 12.5px;
 }
 
-.action { background: rgba(255, 255, 255, 0.06); color: #c6cade; }
-.action:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.action { background: #f2f4f7; color: #3a4149; }
+.action:hover { background: #e9ecf1; color: #1f2329; }
 
-.danger { background: rgba(229, 72, 77, 0.14); color: #ff9a9d; }
-.danger:hover { background: rgba(229, 72, 77, 0.24); }
+.danger { background: rgba(229, 72, 77, 0.08); color: #d6494e; }
+.danger:hover { background: rgba(229, 72, 77, 0.16); }
 
 /* Toast */
 #toast {
@@ -290,9 +292,9 @@ button {
     left: 50%;
     bottom: 30px;
     transform: translateX(-50%) translateY(16px);
-    background: #0f1320;
+    background: #1f2329;
     border: 1px solid rgba(255, 255, 255, 0.12);
-    color: #e8eaf2;
+    color: #f3f4f6;
     padding: 8px 18px;
     border-radius: 10px;
     font-size: 13px;

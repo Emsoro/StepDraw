@@ -12,7 +12,9 @@
     let toastTimer = null;
 
     const editor = $('editor');
-    const PALETTE = ['#1d1d21', '#6b6f82', '#ffffff', '#e5484d', '#f5a524', '#12a594', '#3b82f6', '#8b5cf6'];
+    // 马卡龙色板：描边用深一档粉彩（浅色画布上可见），填充用浅粉彩
+    const STROKE_PALETTE = ['#1d1d21', '#e58bb0', '#efa96e', '#e3c468', '#9ccb7c', '#74c7ac', '#85aee3', '#ac97e0', '#d9a08a'];
+    const FILL_PALETTE = ['#fad4e1', '#ffe4cb', '#fbf0c6', '#dff0cd', '#d2f0e4', '#d8e6f9', '#e6def7', '#f6e3d5'];
 
     // ---------- 渲染调度 ----------
     function requestDraw() {
@@ -482,8 +484,8 @@
         $('btnDup').addEventListener('click', duplicateSelection);
 
         // 样式面板
-        buildPalette('strokeColors', PALETTE, 'stroke');
-        buildPalette('fillColors', PALETTE, 'fill');
+        buildPalette('strokeColors', STROKE_PALETTE, 'stroke');
+        buildPalette('fillColors', FILL_PALETTE, 'fill');
         buildSeg('segSize', [
             { value: 's', label: '细' }, { value: 'm', label: '中' }, { value: 'l', label: '粗' },
         ], 'size');
