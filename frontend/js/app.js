@@ -52,7 +52,7 @@
         editor.style.top = p0.y + 'px';
         editor.style.width = Math.max(60, b.w * cam.z) + 'px';
         editor.style.height = Math.max(size * 1.6, b.h * cam.z) + 'px';
-        editor.style.font = '500 ' + (size * cam.z) + 'px "Segoe UI", "Microsoft YaHei", system-ui, sans-serif';
+        editor.style.font = '500 ' + (size * cam.z) + 'px ' + Geom.fontStack(s.props);
         editor.style.lineHeight = (size * Geom.LINE_H * cam.z) + 'px';
         editor.style.color = s.props.stroke || '#1d1d21';
         editor.style.textAlign = isText ? 'left' : 'center';
@@ -130,6 +130,13 @@
         Bridge.invoke('set_title', { title });
     }
 
+    // ---------- 版本信息 ----------
+    function loadAppInfo() {
+        Bridge.invoke('app_info').then(r => {
+            if (r && r.version) $('appVersion').textContent = 'v' + r.version;
+        });
+    }
+
     // ---------- 工具栏 ----------
     function setTool(t) {
         State.setTool(t);
@@ -151,7 +158,7 @@
                 const s = State.shapes.get(id);
                 if (!s || !s.props) continue;
                 Object.assign(s.props, patch);
-                if (patch.font) { s._layout = null; s._llayout = null; }
+                if (patch.font || patch.family) { s._layout = null; s._llayout = null; }
             }
             State.commit();
         } else {
@@ -189,6 +196,32 @@
         }
     }
 
+    // 可选字体（key 对应 Geom.FAMILIES）
+    const FONT_OPTIONS = [
+        { value: 'sans', label: '默认（无衬线）' },
+        { value: 'simsun', label: '宋体' },
+        { value: 'simhei', label: '黑体' },
+        { value: 'kai', label: '楷体' },
+        { value: 'fangsong', label: '仿宋' },
+        { value: 'youyuan', label: '幼圆' },
+        { value: 'mono', label: '等宽' },
+        { value: 'serif', label: '西文衬线' },
+    ];
+
+    function buildFontSelect() {
+        const sel = $('fontFamily');
+        sel.innerHTML = '';
+        for (const it of FONT_OPTIONS) {
+            const opt = document.createElement('option');
+            opt.value = it.value;
+            opt.textContent = it.label;
+            // 选项用对应字体渲染，方便直接预览
+            opt.style.fontFamily = Geom.fontStack({ family: it.value });
+            sel.appendChild(opt);
+        }
+        sel.addEventListener('change', () => applyStyle({ family: sel.value }));
+    }
+
     // ---------- UI 状态刷新 ----------
     function updateUI() {
         // 工具高亮
@@ -211,6 +244,8 @@
                 b.classList.toggle('active', b.dataset.value === p[key]);
             });
         });
+        const fontSel = $('fontFamily');
+        if (fontSel) fontSel.value = p.family || 'sans';
         // 撤销/重做按钮
         $('mUndo').disabled = !State.canUndo;
         $('mRedo').disabled = !State.canRedo;
@@ -220,8 +255,13 @@
 
         // 提示条
         const n = State.selection.size;
+        let hint = '';
+        if (n === 1) {
+            const s0 = State.shapes.get([...State.selection][0]);
+            if (s0 && s0.type === 'arrow') hint = '拖动两端的圆点可重新连接到其他图形 · Del 删除';
+        }
         $('hintbar').textContent = n > 0
-            ? '已选中 ' + n + ' 个图形 · 拖动移动 / 手柄缩放 · Del 删除 · Ctrl+D 复制'
+            ? (hint || '已选中 ' + n + ' 个图形 · 拖动移动 / 手柄缩放 · Del 删除 · Ctrl+D 复制')
             : TOOLTIPS[State.tool] || '';
     }
 
@@ -233,7 +273,7 @@
         rect: '拖动绘制矩形 · 单击生成默认大小',
         ellipse: '拖动绘制椭圆 · 单击生成默认大小',
         diamond: '拖动绘制菱形（流程图判断） · 单击生成默认大小',
-        arrow: '从图形拖到图形自动连接 · 样式面板可切换直线/折线',
+        arrow: '从图形拖到图形自动连接（松手后仍可拖动端点重连） · 样式面板可切换直线/折线',
         text: '点击画布放置文本',
     };
 
@@ -351,6 +391,30 @@
             .then(r => { if (r.ok) toast('已导出 PNG'); });
     }
 
+    function doExportSvg() {
+        const out = SvgExport.build();
+        if (!out) { toast('画板为空，先画点什么吧'); return; }
+        Bridge.invoke('export_svg', {
+            data: out.text,
+            default_name: (fileName === '未命名' ? '画板' : fileName) + '.svg',
+        }).then(r => { if (r.ok) toast('已导出 SVG'); });
+    }
+
+    // ---------- 样式面板折叠 ----------
+    const STYLEBAR_KEY = 'stepdraw.sidebar';
+
+    function setStylebar(collapsed) {
+        const bar = $('stylebar');
+        const btn = $('styleToggle');
+        bar.classList.toggle('collapsed', collapsed);
+        btn.textContent = collapsed ? '›' : '‹';
+        btn.title = collapsed ? '展开样式面板' : '折叠样式面板';
+        try { localStorage.setItem(STYLEBAR_KEY, collapsed ? '1' : '0'); } catch (_) { /* 存储不可用时忽略 */ }
+        // 面板宽度变化后画布尺寸要重算：过渡首帧与结束后各校准一次
+        requestAnimationFrame(() => { Render.resize(); requestDraw(); });
+        setTimeout(() => { Render.resize(); requestDraw(); }, 240);
+    }
+
     // ---------- 选择操作 ----------
     function deleteSelection() {
         if (!State.selection.size) return;
@@ -441,6 +505,7 @@
 
         if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelection(); return; }
         if (e.key === 'Escape') {
+            $('exportMenu').classList.remove('open');
             State.selection.clear();
             setTool('select');
             return;
@@ -477,11 +542,33 @@
         $('mOpen').addEventListener('click', doOpen);
         $('mSave').addEventListener('click', doSave);
         $('mSaveAs').addEventListener('click', doSaveAs);
-        $('mExport').addEventListener('click', doExportPng);
+
+        // 导出下拉：PNG 位图 / SVG 矢量图
+        const exportMenu = $('exportMenu');
+        $('mExport').addEventListener('click', e => {
+            e.stopPropagation();
+            exportMenu.classList.toggle('open');
+        });
+        exportMenu.addEventListener('click', e => {
+            const b = e.target.closest('button[data-fmt]');
+            if (!b) return;
+            exportMenu.classList.remove('open');
+            if (b.dataset.fmt === 'svg') doExportSvg(); else doExportPng();
+        });
+        document.addEventListener('click', () => exportMenu.classList.remove('open'));
+
         $('mUndo').addEventListener('click', () => State.undo());
         $('mRedo').addEventListener('click', () => State.redo());
         $('btnDelete').addEventListener('click', deleteSelection);
         $('btnDup').addEventListener('click', duplicateSelection);
+
+        // 样式面板折叠（状态记忆）
+        $('styleToggle').addEventListener('click', () => {
+            setStylebar(!$('stylebar').classList.contains('collapsed'));
+        });
+        try {
+            if (localStorage.getItem(STYLEBAR_KEY) === '1') setStylebar(true);
+        } catch (_) { /* 忽略 */ }
 
         // 样式面板
         buildPalette('strokeColors', STROKE_PALETTE, 'stroke');
@@ -495,6 +582,7 @@
         buildSeg('segFont', [
             { value: 's', label: '小' }, { value: 'm', label: '中' }, { value: 'l', label: '大' },
         ], 'font');
+        buildFontSelect();
         buildSeg('segRoute', [
             { value: 'straight', label: '直线' }, { value: 'elbow', label: '折线' },
         ], 'route');
@@ -512,6 +600,15 @@
             saveDraft();
             if (State.dirty) { e.preventDefault(); e.returnValue = ''; }
         });
+
+        // 仓库链接：用系统默认浏览器打开（WebView 内不跳转）
+        document.querySelectorAll('.git-link').forEach(a => {
+            a.addEventListener('click', e => {
+                e.preventDefault();
+                Bridge.invoke('open_url', { url: a.dataset.url });
+            });
+        });
+        loadAppInfo();
 
         // 环境徽标
         if (!Bridge.isNative) $('envBadge').style.display = 'inline-block';

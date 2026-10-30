@@ -73,6 +73,93 @@
         return null;
     }
 
+    // ---------- 连接点 ----------
+    // 就近连接点：指针落在图形内部（含容差）或贴近某个连接点时吸附
+    function portHit(wpt, excludeId) {
+        const z = State.camera.z;
+        const pad = 12 / z;
+        const shapes = [...State.shapes.values()];
+        const nearestOf = s => {
+            let best = null, bestD = Infinity;
+            for (const p of Geom.portsOf(s, getShape)) {
+                const d = Math.hypot(wpt.x - p.x, wpt.y - p.y);
+                if (d < bestD) { bestD = d; best = p; }
+            }
+            return best ? { shape: s, port: best } : null;
+        };
+        // 1) 落在图形内部（含容差）：吸附到最近的连接点（无需精确压中描边）
+        for (let i = shapes.length - 1; i >= 0; i--) {
+            const s = shapes[i];
+            if (!BINDABLE.has(s.type) || s.id === excludeId) continue;
+            const b = Geom.boundsOf(s, getShape);
+            if (wpt.x < b.x - pad || wpt.x > b.x + b.w + pad) continue;
+            if (wpt.y < b.y - pad || wpt.y > b.y + b.h + pad) continue;
+            return nearestOf(s);
+        }
+        // 2) 贴近某个连接点
+        const r = 18 / z;
+        let best = null, bestD = Infinity;
+        for (const s of shapes) {
+            if (!BINDABLE.has(s.type) || s.id === excludeId) continue;
+            for (const p of Geom.portsOf(s, getShape)) {
+                const d = Math.hypot(wpt.x - p.x, wpt.y - p.y);
+                if (d <= r && d < bestD) { bestD = d; best = { shape: s, port: p }; }
+            }
+        }
+        return best;
+    }
+
+    // 指针附近的图形连接点（渲染提示点使用）
+    function nearPorts(wpt, excludeId, active) {
+        const r = 170 / State.camera.z;
+        const map = new Map();
+        if (active) map.set(active.shape.id, active.port.id);
+        for (const s of State.shapes.values()) {
+            if (!BINDABLE.has(s.type) || s.id === excludeId || map.has(s.id)) continue;
+            const b = Geom.boundsOf(s, getShape);
+            const dx = Math.max(b.x - wpt.x, 0, wpt.x - (b.x + b.w));
+            const dy = Math.max(b.y - wpt.y, 0, wpt.y - (b.y + b.h));
+            if (Math.hypot(dx, dy) > r) continue;
+            map.set(s.id, null);
+        }
+        return map.size ? map : null;
+    }
+
+    function setPorts(map) {
+        const cur = State.ui.ports;
+        if (cur === map) return;
+        if (!cur && !map) return;
+        if (cur && map && cur.size === map.size) {
+            let same = true;
+            for (const [k, v] of map) {
+                if (!cur.has(k) || cur.get(k) !== v) { same = false; break; }
+            }
+            if (same) return;
+        }
+        State.ui.ports = map;
+        deps.requestDraw();
+    }
+
+    // 当前唯一选中的箭头
+    function selectedArrow() {
+        if (State.selection.size !== 1) return null;
+        const s = State.shapes.get([...State.selection][0]);
+        return s && s.type === 'arrow' ? s : null;
+    }
+
+    // 箭头端点命中（拖拽端点重新连接）
+    function arrowEndAt(wpt) {
+        const s = selectedArrow();
+        if (!s) return null;
+        const r = Geom.arrowRoute(s, getShape);
+        const tol = 9 / State.camera.z;
+        for (const key of ['b', 'a']) {
+            const p = key === 'a' ? r.a : r.b;
+            if (Math.hypot(wpt.x - p.x, wpt.y - p.y) <= tol) return { shape: s, key };
+        }
+        return null;
+    }
+
     function selectionBounds() {
         let box = null;
         for (const id of State.selection) {
@@ -117,7 +204,9 @@
     }
 
     function endRef(wpt, hit) {
-        return hit ? { id: hit.id, x: wpt.x, y: wpt.y } : { x: wpt.x, y: wpt.y };
+        return hit
+            ? { id: hit.shape.id, anchor: hit.port.id, x: hit.port.x, y: hit.port.y }
+            : { x: wpt.x, y: wpt.y };
     }
 
     // ---------- 指针事件 ----------
@@ -130,6 +219,7 @@
         gesture.startS = sp;
         gesture.startW = wpt;
         gesture.changed = false;
+        setPorts(null);
 
         if (e.button === 1 || spaceHeld || tool === 'hand') {
             gesture.mode = 'pan';
@@ -145,6 +235,19 @@
 
         switch (tool) {
             case 'select': {
+                // 箭头端点优先：拖动端点可重新连接
+                const endHit = arrowEndAt(wpt);
+                if (endHit) {
+                    const other = endHit.key === 'a' ? endHit.shape.b : endHit.shape.a;
+                    gesture.mode = 'end';
+                    gesture.arrowId = endHit.shape.id;
+                    gesture.endKey = endHit.key;
+                    gesture.otherId = other && other.id;
+                    gesture.originals.clear();
+                    gesture.originals.set(endHit.shape.id, clone(endHit.shape));
+                    setPorts(nearPorts(wpt, gesture.otherId, portHit(wpt, gesture.otherId)));
+                    break;
+                }
                 const box = selectionBounds();
                 if (box) {
                     const hd = Geom.handleAt(box, wpt.x, wpt.y, 8 / State.camera.z);
@@ -196,11 +299,15 @@
                 gesture.mode = 'create';
                 State.ui.temp = mkShape(tool, wpt);
                 break;
-            case 'arrow':
+            case 'arrow': {
                 gesture.mode = 'arrow';
-                State.ui.temp = mkShape('arrow', wpt);
-                State.ui.temp.a = endRef(wpt, topHit(wpt, s => BINDABLE.has(s.type)));
+                const h0 = portHit(wpt, null);
+                const temp = mkShape('arrow', wpt);
+                temp.a = endRef(wpt, h0);
+                State.ui.temp = temp;
+                setPorts(nearPorts(wpt, null, h0));
                 break;
+            }
             case 'text': {
                 const t = mkShape('text', wpt);
                 t.w = 220;
@@ -291,9 +398,23 @@
             case 'erase':
                 eraseAt(wpt);
                 break;
-            case 'arrow':
-                State.ui.temp.b = endRef(wpt, topHit(wpt, s => BINDABLE.has(s.type)));
+            case 'end': {
+                const s = State.shapes.get(gesture.arrowId);
+                if (!s) break;
+                gesture.changed = true;
+                const h = portHit(wpt, gesture.otherId);
+                s[gesture.endKey] = endRef(wpt, h);
+                setPorts(nearPorts(wpt, gesture.otherId, h));
                 break;
+            }
+            case 'arrow': {
+                const t = State.ui.temp;
+                const exclude = t.a.id || null;
+                const h = portHit(wpt, exclude);
+                t.b = endRef(wpt, h);
+                setPorts(nearPorts(wpt, exclude, h));
+                break;
+            }
             default:
                 if (!spaceHeld) hoverCursor(sp, wpt);
                 return;
@@ -349,12 +470,16 @@
                 if (valid) {
                     State.shapes.set(t.id, t);
                     State.selection.clear();
+                    State.selection.add(t.id);   // 选中新建箭头，可直接拖动端点
                     State.setTool('select');
                     State.commit();
                 }
                 State.ui.temp = null;
                 break;
             }
+            case 'end':
+                if (gesture.changed) State.commit();
+                break;
             case 'erase':
                 if (gesture.changed) State.commit();
                 break;
@@ -363,8 +488,12 @@
         gesture.mode = 'idle';
         gesture.changed = false;
         gesture.handle = null;
+        gesture.arrowId = null;
+        gesture.endKey = null;
+        gesture.otherId = null;
         gesture.originals.clear();
         State.ui.hover.clear();
+        setPorts(null);
         if (gesture.pointerId !== null) {
             try { canvas.releasePointerCapture(gesture.pointerId); } catch (_) { /* ignore */ }
             gesture.pointerId = null;
@@ -406,6 +535,7 @@
     function eraseAt(wpt) {
         const hit = topHit(wpt);
         if (hit) {
+            State.detachArrows(new Set([hit.id]));
             State.shapes.delete(hit.id);
             State.selection.delete(hit.id);
             State.ui.hover.delete(hit.id);
@@ -423,14 +553,38 @@
 
     // ---------- 光标与缩放 ----------
     function hoverCursor(sp, wpt) {
-        if (State.tool === 'eraser') { eraserHover(wpt); canvas.style.cursor = 'cell'; return; }
+        if (State.tool === 'eraser') {
+            setPorts(null);
+            eraserHover(wpt);
+            canvas.style.cursor = 'cell';
+            return;
+        }
         State.ui.hover.clear();
-        if (State.tool !== 'select') { canvas.style.cursor = ''; return; }
+
+        // 箭头工具：高亮即将吸附的连接点
+        if (State.tool === 'arrow') {
+            setPorts(nearPorts(wpt, null, portHit(wpt, null)));
+            canvas.style.cursor = 'crosshair';
+            return;
+        }
+        if (State.tool !== 'select') {
+            setPorts(null);
+            canvas.style.cursor = '';
+            return;
+        }
+
+        if (arrowEndAt(wpt)) {
+            setPorts(nearPorts(wpt, null, portHit(wpt, null)));
+            canvas.style.cursor = 'pointer';
+            return;
+        }
         const box = selectionBounds();
         if (box) {
             const hd = Geom.handleAt(box, wpt.x, wpt.y, 8 / State.camera.z);
-            if (hd) { canvas.style.cursor = hd.cursor; return; }
+            if (hd) { setPorts(null); canvas.style.cursor = hd.cursor; return; }
         }
+        // 选中箭头时提示可连接的位置
+        setPorts(selectedArrow() ? nearPorts(wpt, null, portHit(wpt, null)) : null);
         canvas.style.cursor = topHit(wpt) ? 'move' : 'default';
     }
 

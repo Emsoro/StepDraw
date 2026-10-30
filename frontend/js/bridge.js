@@ -37,6 +37,22 @@
                 a.click();
                 return { ok: true, path: args.default_name || '' };
             }
+            case 'export_svg': {
+                const blob = new Blob([args.data || ''], { type: 'image/svg+xml;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = args.default_name || 'stepdraw.svg';
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                return { ok: true, path: args.default_name || '' };
+            }
+            case 'open_url': {
+                window.open(args.url || '', '_blank', 'noopener');
+                return { ok: true };
+            }
+            case 'app_info':
+                return { ok: true, version: '1.0.0' };
             case 'set_title':
                 document.title = args.title || 'StepDraw';
                 return { success: true };

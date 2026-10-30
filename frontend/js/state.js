@@ -5,7 +5,7 @@
     const shapes = new Map();          // id → shape（插入顺序即 z 序）
     const camera = { x: 0, y: 0, z: 1 };
     const selection = new Set();       // 选中的 shape id
-    const ui = { marquee: null, temp: null, hover: new Set(), editingId: null };
+    const ui = { marquee: null, temp: null, hover: new Set(), editingId: null, ports: null };
 
     // 新图形的默认样式
     const style = {
@@ -14,6 +14,7 @@
         size: 'm',      // 线宽 s/m/l
         dash: 'solid',  // solid/dashed/dotted
         font: 'm',      // 字号 s/m/l
+        family: 'sans', // 字体 sans/serif/mono/kai
         route: 'elbow', // 箭头 straight/elbow
     };
 
@@ -46,6 +47,7 @@
         shapes.clear();
         selection.clear();
         ui.hover.clear();
+        ui.ports = null;
         for (const s of JSON.parse(json)) shapes.set(s.id, s);
     }
 
@@ -90,6 +92,7 @@
         shapes.clear();
         selection.clear();
         ui.hover.clear();
+        ui.ports = null;
         ui.temp = null;
         ui.marquee = null;
         for (const s of arr || []) {
@@ -101,6 +104,7 @@
         shapes.clear();
         selection.clear();
         ui.hover.clear();
+        ui.ports = null;
         ui.temp = null;
         ui.marquee = null;
         camera.x = 0; camera.y = 0; camera.z = 1;
@@ -119,6 +123,7 @@
     function setTool(t) {
         tool = t;
         ui.hover.clear();
+        ui.ports = null;
         notify();
     }
 

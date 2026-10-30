@@ -1,17 +1,22 @@
 // StepDraw —— 类 tldraw 白板，基于 TauriCPP (C++ 后端 + Web 前端)
 //
 // 职责划分：文档状态与渲染都在前端（保证 60fps 交互）；
-//           C++ 提供原生文件对话框、文件读写、PNG 导出、窗口标题等系统能力。
+//           C++ 提供原生文件对话框、文件读写、PNG/SVG 导出、窗口标题等系统能力。
 #include "tauricpp/app.hpp"
 #include "tauricpp/dialog.hpp"
 
 #include <Windows.h>
+#include <shellapi.h>
 
 #include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <vector>
+
+#ifndef STEPDRAW_VERSION
+#define STEPDRAW_VERSION "1.0.0"
+#endif
 
 using nlohmann::json;
 
@@ -180,6 +185,51 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         }
         j["ok"] = true;
         j["path"] = *path;
+        return j;
+    });
+
+    // 导出 SVG（前端生成的 SVG 文本 → 原生保存对话框 → 按 UTF-8 写文件）
+    bridge.RegisterCommand("export_svg", [&app](const json& args) -> json {
+        tauricpp::Dialog::SaveOptions opts;
+        opts.title = "导出 SVG 矢量图";
+        opts.default_filename = args.value("default_name", "画板.svg");
+        opts.filters = {{"SVG 矢量图", "*.svg"}, {"All Files", "*.*"}};
+
+        json j;
+        auto path = tauricpp::Dialog::SaveFile(app.GetWindow().GetHwnd(), opts);
+        if (!path) {
+            j["ok"] = false;
+            j["reason"] = "cancel";
+            return j;
+        }
+        if (!WriteFileBinary(ToWide(*path), args.value("data", ""))) {
+            j["ok"] = false;
+            j["reason"] = "write_failed";
+            return j;
+        }
+        j["ok"] = true;
+        j["path"] = *path;
+        return j;
+    });
+
+    // 应用信息（版本号供前端右上角显示）
+    bridge.RegisterCommand("app_info", [](const json&) -> json {
+        return json{{"ok", true}, {"version", STEPDRAW_VERSION}};
+    });
+
+    // 用系统默认浏览器打开链接（仅允许 http/https）
+    bridge.RegisterCommand("open_url", [](const json& args) -> json {
+        const std::string url = args.value("url", "");
+        json j;
+        if (url.rfind("http://", 0) != 0 && url.rfind("https://", 0) != 0) {
+            j["ok"] = false;
+            j["reason"] = "bad_url";
+            return j;
+        }
+        const auto rc = reinterpret_cast<INT_PTR>(ShellExecuteW(
+            nullptr, L"open", ToWide(url).c_str(), nullptr, nullptr, SW_SHOWNORMAL));
+        j["ok"] = rc > 32;
+        if (!j["ok"]) j["reason"] = "open_failed";
         return j;
     });
 

@@ -129,25 +129,18 @@
             }
             case 'arrow': {
                 const r = Geom.arrowRoute(s, getShape);
-                const pts = r.pts;
-                const headLen = Math.max(9, sw * 3);
+                const a = Geom.arrowHead(r.pts, sw);
                 // 线段（终点回退，避免穿过箭头）
                 c.beginPath();
-                const last = pts[pts.length - 1];
-                const prev = pts[pts.length - 2] || last;
-                const dLen = Math.hypot(last.x - prev.x, last.y - prev.y) || 1;
-                const ux = (last.x - prev.x) / dLen, uy = (last.y - prev.y) / dLen;
-                const back = Math.min(headLen * 0.8, dLen / 2);
-                c.moveTo(pts[0].x, pts[0].y);
-                for (let i = 1; i < pts.length - 1; i++) c.lineTo(pts[i].x, pts[i].y);
-                c.lineTo(last.x - ux * back, last.y - uy * back);
+                c.moveTo(a.shaft[0].x, a.shaft[0].y);
+                for (let i = 1; i < a.shaft.length; i++) c.lineTo(a.shaft[i].x, a.shaft[i].y);
                 c.stroke();
                 // 箭头
                 c.setLineDash([]);
                 c.beginPath();
-                c.moveTo(last.x, last.y);
-                c.lineTo(last.x - ux * headLen - uy * headLen * 0.45, last.y - uy * headLen + ux * headLen * 0.45);
-                c.lineTo(last.x - ux * headLen + uy * headLen * 0.45, last.y - uy * headLen - ux * headLen * 0.45);
+                c.moveTo(a.tip.x, a.tip.y);
+                c.lineTo(a.left.x, a.left.y);
+                c.lineTo(a.right.x, a.right.y);
                 c.closePath();
                 c.fillStyle = p.stroke || '#1d1d21';
                 c.fill();
@@ -263,6 +256,47 @@
                         c.stroke();
                     }
                 }
+                // 单条箭头：绘制可拖拽的端点手柄（拖动可重新连接）
+                if (State.selection.size === 1) {
+                    const arrow = State.shapes.get([...State.selection][0]);
+                    if (arrow && arrow.type === 'arrow') {
+                        const r = Geom.arrowRoute(arrow, getShape);
+                        const ends = [{ p: r.a, ref: arrow.a }, { p: r.b, ref: arrow.b }];
+                        for (const it of ends) {
+                            const sp = w2s(it.p.x, it.p.y, cam);
+                            c.beginPath();
+                            c.arc(sp.x, sp.y, 6, 0, Math.PI * 2);
+                            c.fillStyle = '#ffffff';
+                            c.strokeStyle = it.ref.id ? '#1d4ed8' : '#3b82f6';
+                            c.lineWidth = 2;
+                            c.fill();
+                            c.stroke();
+                            c.beginPath();
+                            c.arc(sp.x, sp.y, it.ref.id ? 2.8 : 2, 0, Math.PI * 2);
+                            c.fillStyle = it.ref.id ? '#1d4ed8' : '#93c5fd';
+                            c.fill();
+                        }
+                    }
+                }
+            }
+
+            // 连接点提示（箭头工具 / 拖拽端点时磁吸候选）
+            if (State.ui.ports && State.ui.ports.size) {
+                for (const [sid, activePort] of State.ui.ports) {
+                    const s = State.shapes.get(sid);
+                    if (!s) continue;
+                    for (const pt of Geom.portsOf(s, getShape)) {
+                        const sp = w2s(pt.x, pt.y, cam);
+                        const act = pt.id === activePort;
+                        c.beginPath();
+                        c.arc(sp.x, sp.y, act ? 6.5 : 3.8, 0, Math.PI * 2);
+                        c.fillStyle = act ? '#3b82f6' : '#ffffff';
+                        c.strokeStyle = act ? '#1d4ed8' : 'rgba(59,130,246,0.85)';
+                        c.lineWidth = 1.5;
+                        c.fill();
+                        c.stroke();
+                    }
+                }
             }
         }
         c.setTransform(1, 0, 0, 1, 0, 0);
@@ -284,5 +318,5 @@
         renderScene(ctx, State.camera, cssW, cssH, { dpr, grid: true, overlays: true });
     }
 
-    window.Render = { init, resize, draw, s2w, w2s, renderScenePublic: renderScene };
+    window.Render = { init, resize, draw, s2w, w2s, dashFor, renderScenePublic: renderScene };
 })();

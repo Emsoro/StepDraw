@@ -191,3 +191,5 @@ add_executable(StepDraw WIN32
 
 target_include_directories(StepDraw PRIVATE "${GEN_DIR}")
 target_link_libraries(StepDraw PRIVATE tauricpp)
+# 版本号单一来源：前端右上角从 app_info 命令读取
+target_compile_definitions(StepDraw PRIVATE STEPDRAW_VERSION="${PROJECT_VERSION}")

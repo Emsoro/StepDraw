@@ -11,12 +11,39 @@
     const PAD = 0.35;                      // 文本内边距（相对字号）
     const MIN_SIZE = 8;                    // 最小尺寸
 
+    // 可选字体：props.family 存 key（旧文档没有该字段时回落到 sans）
+    const FAMILIES = {
+        sans: '"Segoe UI", "Microsoft YaHei", system-ui, sans-serif',
+        simsun: '"SimSun", "Songti SC", "Microsoft YaHei", serif',
+        simhei: '"SimHei", "Microsoft YaHei", "Segoe UI", sans-serif',
+        kai: 'KaiTi, STKaiti, "Microsoft YaHei", serif',
+        fangsong: '"FangSong", "STFangsong", "SimSun", "Microsoft YaHei", serif',
+        youyuan: '"YouYuan", STYuanti, "Microsoft YaHei", sans-serif',
+        mono: '"Cascadia Mono", Consolas, "Courier New", "Microsoft YaHei", monospace',
+        serif: 'Georgia, "Times New Roman", "SimSun", "Microsoft YaHei", serif',
+    };
+
     function uid() {
         return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     }
 
+    function fontStack(props) {
+        return FAMILIES[(props && props.family) || 'sans'] || FAMILIES.sans;
+    }
+
     function fontFor(props) {
-        return '500 ' + (FONT[props.font] || 24) + 'px "Segoe UI", "Microsoft YaHei", system-ui, sans-serif';
+        return '500 ' + (FONT[props.font] || 24) + 'px ' + fontStack(props);
+    }
+
+    // 垂直度量：把 canvas 的 top/middle 基线换算成 SVG 的 alphabetic 基线
+    function textMetrics(props) {
+        measureCtx.font = fontFor(props);
+        const m = measureCtx.measureText('中');
+        const size = FONT[props.font] || 24;
+        return {
+            ascent: m.fontBoundingBoxAscent != null ? m.fontBoundingBoxAscent : size * 0.88,
+            descent: m.fontBoundingBoxDescent != null ? m.fontBoundingBoxDescent : size * 0.22,
+        };
     }
 
     function normRect(x1, y1, x2, y2) {
@@ -58,7 +85,7 @@
 
     // 文本形状排版：按形状宽度换行
     function textLayout(s) {
-        const key = s.label + '\u0001' + s.w + '\u0001' + s.props.font;
+        const key = s.label + '\u0001' + s.w + '\u0001' + s.props.font + '\u0001' + (s.props.family || '');
         if (s._layout && s._layout.key === key) return s._layout;
         const size = FONT[s.props.font] || 24;
         measureCtx.font = fontFor(s.props);
@@ -70,7 +97,7 @@
 
     // 形状标签排版：按形状宽度 80% 换行
     function labelLayout(s) {
-        const key = 'L' + s.label + '\u0001' + s.w + '\u0001' + s.props.font;
+        const key = 'L' + s.label + '\u0001' + s.w + '\u0001' + s.props.font + '\u0001' + (s.props.family || '');
         if (s._llayout && s._llayout.key === key) return s._llayout;
         const size = FONT[s.props.font] || 24;
         measureCtx.font = fontFor(s.props);
@@ -190,7 +217,50 @@
         return { x: cx + dx * k, y: cy + dy * k };
     }
 
-    // 按主轴方向取形状边中点（折线路由用）
+    // 连接点：四边中点（Visio 风格，箭头可绑定到具体连接点）
+    function portsOf(s, getShape) {
+        const b = boundsOf(s, getShape);
+        const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+        return [
+            { id: 'n', x: cx, y: b.y },
+            { id: 'e', x: b.x + b.w, y: cy },
+            { id: 's', x: cx, y: b.y + b.h },
+            { id: 'w', x: b.x, y: cy },
+        ];
+    }
+
+    function portOf(s, anchor, getShape) {
+        if (!s || !anchor) return null;
+        for (const p of portsOf(s, getShape)) {
+            if (p.id === anchor) return p;
+        }
+        return null;
+    }
+
+    // 连接点法线：连接线离开图形的方向
+    function portNormal(port) {
+        if (!port) return { x: 0, y: 0 };
+        if (port.id === 'e') return { x: 1, y: 0 };
+        if (port.id === 'w') return { x: -1, y: 0 };
+        if (port.id === 's') return { x: 0, y: 1 };
+        return { x: 0, y: -1 };
+    }
+
+    function isHorizPort(port) {
+        return !!port && (port.id === 'e' || port.id === 'w');
+    }
+
+    function dedupePts(pts) {
+        const out = [];
+        for (const p of pts) {
+            const last = out[out.length - 1];
+            if (last && Math.abs(last.x - p.x) < 0.01 && Math.abs(last.y - p.y) < 0.01) continue;
+            out.push(p);
+        }
+        return out;
+    }
+
+    // 按主轴方向取形状边中点（直线/折线共用的端点）
     function anchorToward(s, other, axis, getShape) {
         const b = boundsOf(s, getShape);
         const c = center(b);
@@ -198,34 +268,122 @@
         return { x: c.x, y: other.y <= c.y ? b.y : b.y + b.h };
     }
 
-    // 解析箭头两端（支持绑定图形）并计算路径点
-    function arrowRoute(s, getShape) {
+    // 解析箭头两端：端点位置只取决于绑定关系（图形 + 连接点），与直线/折线无关
+    // 因此切换线型时端点不会跳动，只是中间走线改变
+    function arrowEnds(s, getShape) {
         getShape = getShape || (() => null);
         const sa = s.a.id ? getShape(s.a.id) : null;
         const sb = s.b.id ? getShape(s.b.id) : null;
-        const pa = sa ? center(boundsOf(sa, getShape)) : { x: s.a.x, y: s.a.y };
-        const pb = sb ? center(boundsOf(sb, getShape)) : { x: s.b.x, y: s.b.y };
+        const ca = sa ? center(boundsOf(sa, getShape)) : { x: s.a.x, y: s.a.y };
+        const cb = sb ? center(boundsOf(sb, getShape)) : { x: s.b.x, y: s.b.y };
+        const qa = portOf(sa, s.a.anchor, getShape);
+        const qb = portOf(sb, s.b.anchor, getShape);
+
+        // 主轴：有水平方向的连接点时用水平，否则看两端中心偏移
+        let horizontal;
+        if (isHorizPort(qa) || isHorizPort(qb)) horizontal = true;
+        else if (qa || qb) horizontal = false;
+        else horizontal = Math.abs(cb.x - ca.x) >= Math.abs(cb.y - ca.y);
+        const axis = horizontal ? 'h' : 'v';
+
+        let A = qa ? { x: qa.x, y: qa.y }
+            : (sa ? anchorToward(sa, cb, axis, getShape) : { x: s.a.x, y: s.a.y });
+        let B = qb ? { x: qb.x, y: qb.y }
+            : (sb ? anchorToward(sb, ca, axis, getShape) : { x: s.b.x, y: s.b.y });
+
+        // 两端重合（如旧数据两端连到同一连接点）：给一个最小可见长度，避免整条线堆成一个点
+        if (Math.hypot(B.x - A.x, B.y - A.y) < 2) {
+            const nb = portNormal(qb), na = portNormal(qa);
+            const dir = (nb.x || nb.y) ? nb
+                : ((na.x || na.y) ? { x: -na.x, y: -na.y } : { x: 1, y: 0 });
+            B = { x: B.x + dir.x * 40, y: B.y + dir.y * 40 };
+        }
+        return { A, B, qa, qb, horizontal };
+    }
+
+    // 解析箭头两端（支持绑定图形与连接点）并计算路径点
+    function arrowRoute(s, getShape) {
+        const ends = arrowEnds(s, getShape);
+        const A = ends.A, B = ends.B;
+        const qa = ends.qa, qb = ends.qb;
+        const nA = portNormal(qa), nB = portNormal(qb);
         const route = (s.props && s.props.route) || 'straight';
 
         if (route === 'elbow') {
-            const horizontal = Math.abs(pb.x - pa.x) >= Math.abs(pb.y - pa.y);
-            const A = sa ? anchorToward(sa, pb, horizontal ? 'h' : 'v', getShape) : { x: s.a.x, y: s.a.y };
-            const B = sb ? anchorToward(sb, pa, horizontal ? 'h' : 'v', getShape) : { x: s.b.x, y: s.b.y };
+            const horizontal = ends.horizontal;
+            const STUB = 24;
             let pts;
-            if (horizontal) {
-                if (Math.abs(A.y - B.y) < 2) pts = [A, B];
-                else { const mx = (A.x + B.x) / 2; pts = [A, { x: mx, y: A.y }, { x: mx, y: B.y }, B]; }
+
+            if (qa && qb && isHorizPort(qa) !== isHorizPort(qb)) {
+                // 两端法线互相垂直：走两段直角过渡
+                if (isHorizPort(qa)) {
+                    let sx = (A.x + B.x) / 2;
+                    if (nA.x > 0 && sx < A.x + STUB) sx = A.x + STUB;
+                    if (nA.x < 0 && sx > A.x - STUB) sx = A.x - STUB;
+                    let sy = (A.y + B.y) / 2;
+                    if (nB.y < 0 && sy > B.y - STUB) sy = B.y - STUB;
+                    if (nB.y > 0 && sy < B.y + STUB) sy = B.y + STUB;
+                    pts = [A, { x: sx, y: A.y }, { x: sx, y: sy }, { x: B.x, y: sy }, B];
+                } else {
+                    let my = (A.y + B.y) / 2;
+                    if (nA.y > 0 && my < A.y + STUB) my = A.y + STUB;
+                    if (nA.y < 0 && my > A.y - STUB) my = A.y - STUB;
+                    let sx = (A.x + B.x) / 2;
+                    if (nB.x < 0 && sx > B.x - STUB) sx = B.x - STUB;
+                    if (nB.x > 0 && sx < B.x + STUB) sx = B.x + STUB;
+                    pts = [A, { x: A.x, y: my }, { x: sx, y: my }, { x: sx, y: B.y }, B];
+                }
+            } else if (horizontal) {
+                const sameSide = nA.x !== 0 && nB.x !== 0 && nA.x === nB.x;
+                if (sameSide && Math.abs(A.y - B.y) < 0.5) {
+                    // 两端同侧且高度相近：上下绕行，避免穿过图形
+                    const xs = A.x + nA.x * STUB, xe = B.x + nB.x * STUB;
+                    const my = A.y - STUB * 2;
+                    pts = [A, { x: xs, y: A.y }, { x: xs, y: my }, { x: xe, y: my }, { x: xe, y: B.y }, B];
+                } else {
+                    let mx = (A.x + B.x) / 2;
+                    if (nA.x > 0 && mx < A.x + STUB) mx = A.x + STUB;
+                    if (nA.x < 0 && mx > A.x - STUB) mx = A.x - STUB;
+                    if (nB.x < 0 && mx > B.x - STUB) mx = B.x - STUB;
+                    if (nB.x > 0 && mx < B.x + STUB) mx = B.x + STUB;
+                    pts = Math.abs(A.y - B.y) < 0.5 ? [A, B] : [A, { x: mx, y: A.y }, { x: mx, y: B.y }, B];
+                }
             } else {
-                if (Math.abs(A.x - B.x) < 2) pts = [A, B];
-                else { const my = (A.y + B.y) / 2; pts = [A, { x: A.x, y: my }, { x: B.x, y: my }, B]; }
+                const sameSide = nA.y !== 0 && nB.y !== 0 && nA.y === nB.y;
+                if (sameSide && Math.abs(A.x - B.x) < 0.5) {
+                    const ys = A.y + nA.y * STUB, ye = B.y + nB.y * STUB;
+                    const mx = A.x - STUB * 2;
+                    pts = [A, { x: A.x, y: ys }, { x: mx, y: ys }, { x: mx, y: ye }, { x: B.x, y: ye }, B];
+                } else {
+                    let my = (A.y + B.y) / 2;
+                    if (nA.y > 0 && my < A.y + STUB) my = A.y + STUB;
+                    if (nA.y < 0 && my > A.y - STUB) my = A.y - STUB;
+                    if (nB.y < 0 && my > B.y - STUB) my = B.y - STUB;
+                    if (nB.y > 0 && my < B.y + STUB) my = B.y + STUB;
+                    pts = Math.abs(A.x - B.x) < 0.5 ? [A, B] : [A, { x: A.x, y: my }, { x: B.x, y: my }, B];
+                }
             }
-            return { pts, a: A, b: B };
+            return { pts: dedupePts(pts), a: A, b: B };
         }
 
-        // 直线：从对方中心方向取边界交点
-        const B = sb ? borderPoint(sb, pa, getShape) : { x: s.b.x, y: s.b.y };
-        const A = sa ? borderPoint(sa, B, getShape) : { x: s.a.x, y: s.a.y };
-        return { pts: [A, B], a: A, b: B };
+        // 直线：直接连接两端（端点与折线完全一致）
+        return { pts: dedupePts([A, B]), a: A, b: B };
+    }
+
+    // 箭头几何：线段（末端回退避免穿透箭头）+ 箭头三角形
+    function arrowHead(pts, sw) {
+        const last = pts[pts.length - 1];
+        const prev = pts[pts.length - 2] || last;
+        const dLen = Math.hypot(last.x - prev.x, last.y - prev.y) || 1;
+        const ux = (last.x - prev.x) / dLen, uy = (last.y - prev.y) / dLen;
+        const headLen = Math.max(9, sw * 3);
+        const back = Math.min(headLen * 0.8, dLen / 2);
+        return {
+            shaft: pts.slice(0, -1).concat([{ x: last.x - ux * back, y: last.y - uy * back }]),
+            tip: last,
+            left: { x: last.x - ux * headLen - uy * headLen * 0.45, y: last.y - uy * headLen + ux * headLen * 0.45 },
+            right: { x: last.x - ux * headLen + uy * headLen * 0.45, y: last.y - uy * headLen - ux * headLen * 0.45 },
+        };
     }
 
     // ---------- 移动 / 缩放 ----------
@@ -308,10 +466,11 @@
     }
 
     window.Geom = {
-        STROKE, FONT, LINE_H, PAD, MIN_SIZE,
-        uid, fontFor, normRect, inflate, center, union, rectsIntersect,
+        STROKE, FONT, LINE_H, PAD, MIN_SIZE, FAMILIES,
+        uid, fontStack, fontFor, textMetrics, normRect, inflate, center, union, rectsIntersect,
         textLayout, labelLayout, boundsOf, hitShape, hitRoute, distToSeg,
-        borderPoint, arrowRoute, moveShape, mapper, scaleShape,
+        borderPoint, arrowRoute, arrowHead, portsOf, portOf, portNormal, isHorizPort,
+        moveShape, mapper, scaleShape,
         handles, handleAt, resizeBox, simplify, boundsOfPoints,
     };
 })();
