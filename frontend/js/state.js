@@ -22,6 +22,7 @@
     let dirty = false;
     let history = [];
     let future = [];
+    let lastState = '[]';              // 当前画板内容的快照（撤销时先回退到这里的前一个）
     const listeners = new Set();
     const HISTORY_LIMIT = 200;
 
@@ -49,12 +50,15 @@
         ui.hover.clear();
         ui.ports = null;
         for (const s of JSON.parse(json)) shapes.set(s.id, s);
+        lastState = json;
     }
 
     // ---------- 历史 ----------
+    // 历史里存的是"变动前的画板"，因此 commit 后第一次 undo 就能回退本次操作
     function commit() {
-        history.push(serialize());
+        history.push(lastState);
         if (history.length > HISTORY_LIMIT) history.shift();
+        lastState = serialize();
         future.length = 0;
         dirty = true;
         notify();
@@ -62,7 +66,7 @@
 
     function undo() {
         if (!history.length) return;
-        future.push(serialize());
+        future.push(lastState);
         loadSnapshot(history.pop());
         dirty = true;
         notify();
@@ -70,7 +74,7 @@
 
     function redo() {
         if (!future.length) return;
-        history.push(serialize());
+        history.push(lastState);
         loadSnapshot(future.pop());
         dirty = true;
         notify();
@@ -79,6 +83,7 @@
     function resetHistory() {
         history = [];
         future = [];
+        lastState = serialize();
         dirty = false;
         notify();
     }
@@ -98,6 +103,7 @@
         for (const s of arr || []) {
             if (s && s.id && s.type) shapes.set(s.id, s);
         }
+        lastState = serialize();
     }
 
     function clearAll() {
@@ -108,6 +114,20 @@
         ui.temp = null;
         ui.marquee = null;
         camera.x = 0; camera.y = 0; camera.z = 1;
+        lastState = serialize();
+    }
+
+    // 清空所有图形（保留相机/视图），并记入历史，可用 Ctrl+Z 恢复
+    function clearShapes() {
+        if (!shapes.size) return false;
+        shapes.clear();
+        selection.clear();
+        ui.hover.clear();
+        ui.ports = null;
+        ui.temp = null;
+        ui.marquee = null;
+        commit();          // 清空前的画板进入历史
+        return true;
     }
 
     // 删除图形时，冻结绑定到它的箭头端点（改为绝对坐标）
@@ -135,7 +155,7 @@
         get canRedo() { return future.length > 0; },
         set dirty(v) { dirty = v; },
         setTool, commit, undo, redo, resetHistory,
-        exportShapes, importShapes, clearAll, detachArrows,
+        exportShapes, importShapes, clearAll, clearShapes, detachArrows,
         onChange, serialize,
     };
 })();

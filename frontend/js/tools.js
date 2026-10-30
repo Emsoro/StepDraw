@@ -308,22 +308,11 @@
                 setPorts(nearPorts(wpt, null, h0));
                 break;
             }
-            case 'text': {
-                const t = mkShape('text', wpt);
-                t.w = 220;
-                t.x = wpt.x - t.w / 2;
-                t.y = wpt.y - (Geom.FONT[t.props.font] || 24) * 0.7;
-                t.label = '';
-                t._new = true;
-                State.shapes.set(t.id, t);
-                State.selection.clear();
-                State.selection.add(t.id);
-                State.setTool('select');
-                gesture.mode = 'idle';
-                deps.startEdit(t.id);
-                deps.updateUI();
+            case 'text':
+                // 创建文本推迟到 pointerup：同一次点击的 mousedown 默认动作会把焦点收回 body，
+                // 若此时就 focus 编辑框，会被紧随的 blur 当成空文本提交并删除，看起来就是“点了没反应”
+                gesture.mode = 'text';
                 break;
-            }
         }
         deps.requestDraw();
     }
@@ -451,6 +440,19 @@
                 State.ui.temp = null;
                 break;
             }
+            case 'text': {
+                const t = mkShape('text', gesture.startW);
+                t.w = 220;
+                t.x = gesture.startW.x - t.w / 2;
+                t.y = gesture.startW.y - (Geom.FONT[t.props.font] || 24) * 0.7;
+                t._new = true;
+                State.shapes.set(t.id, t);
+                State.selection.clear();
+                State.selection.add(t.id);
+                State.setTool('select');
+                deps.startEdit(t.id);
+                break;
+            }
             case 'draw': {
                 const pts = Geom.simplify(gesture.pts, 1.2 / cam.z);
                 if (pts.length) {
@@ -503,16 +505,29 @@
         deps.updateUI();
     }
 
+    // 内部命中（忽略填充）：双击无填充图形内部也能进入文字编辑
+    function insideHit(wpt) {
+        const arr = [...State.shapes.values()];
+        for (let i = arr.length - 1; i >= 0; i--) {
+            const s = arr[i];
+            if (!BINDABLE.has(s.type)) continue;
+            if (Geom.hitInside(s, wpt.x, wpt.y, getShape)) return s;
+        }
+        return null;
+    }
+
     function onDblClick(e) {
         if (State.tool !== 'select') return;
         const sp = relPt(e);
         const wpt = s2w(sp.x, sp.y);
         const hit = topHit(wpt);
-        if (hit && (BINDABLE.has(hit.type))) {
+        // 描边/填充命中优先，其次是图形内部（无填充的矩形、椭圆、菱形）
+        const target = (hit && BINDABLE.has(hit.type)) ? hit : insideHit(wpt);
+        if (target) {
             State.selection.clear();
-            State.selection.add(hit.id);
+            State.selection.add(target.id);
             State.setTool('select');
-            deps.startEdit(hit.id);
+            deps.startEdit(target.id);
         } else if (!hit) {
             // 空白处双击：新建文本
             const t = mkShape('text', wpt);

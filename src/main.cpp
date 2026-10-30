@@ -15,7 +15,7 @@
 #include <vector>
 
 #ifndef STEPDRAW_VERSION
-#define STEPDRAW_VERSION "1.0.0"
+#define STEPDRAW_VERSION "1.0.1"
 #endif
 
 using nlohmann::json;

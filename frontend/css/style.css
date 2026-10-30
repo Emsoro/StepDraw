@@ -40,27 +40,40 @@ button {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex: 0 0 auto;
     font-weight: 600;
     font-size: 14px;
     letter-spacing: 0.02em;
 }
 
-.menu { display: flex; align-items: center; gap: 2px; }
+.menu { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
 
 .menu button {
-    padding: 5px 10px;
+    padding: 6px 11px;
     border-radius: 8px;
     font-size: 13px;
     color: #5c6470;
+    white-space: nowrap;
 }
 
 .menu button:hover:not(:disabled) { background: rgba(31, 35, 41, 0.06); color: #1f2329; }
 .menu button:disabled { opacity: 0.35; cursor: default; }
 
+/* 图标按钮（撤销 / 重做）：固定宽度，图标居中 */
+.menu button.icon {
+    width: 30px;
+    padding: 6px 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.menu button.icon svg { display: block; }
+
 .msep {
     width: 1px;
     height: 18px;
-    margin: 0 6px;
+    margin: 0 5px;
     background: rgba(31, 35, 41, 0.12);
 }
 
@@ -74,6 +87,7 @@ button {
     display: flex;
     align-items: center;
     gap: 6px;
+    flex: 0 0 auto;
 }
 
 .app-version {
@@ -84,6 +98,8 @@ button {
     padding: 2px 8px;
     letter-spacing: 0.02em;
     white-space: nowrap;
+    /* 胶囊无图标内边距，补 5px 让「胶囊→图标」的间隙与实际图标字形间距一致 */
+    margin-right: 5px;
 }
 
 .git-link {
@@ -101,6 +117,16 @@ button {
 .git-link:hover { background: #f2f4f7; color: #1f2329; }
 .git-link:focus-visible { outline: 2px solid #3b82f6; outline-offset: 1px; }
 .git-link svg { display: block; }
+
+/* 窄窗口下优先保证菜单不被挤压：依次收起版本号、仓库链接 */
+@media (max-width: 820px) {
+    .app-version { display: none; }
+}
+
+@media (max-width: 760px) {
+    .app-links { display: none; }
+    .filename { max-width: 160px; }
+}
 
 .dropdown {
     position: absolute;
@@ -138,6 +164,7 @@ button {
     padding: 3px 10px;
     border-radius: 999px;
     max-width: 260px;
+    flex: 0 1 auto;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -195,6 +222,15 @@ button {
 }
 
 .tsep { width: 26px; height: 1px; margin: 6px 0; background: rgba(31, 35, 41, 0.1); }
+
+/* 工具栏底部：清空画板（垃圾桶），靠 auto 外边距顶到最下方 */
+.tsep.bottom { margin-top: auto; }
+
+#btnClear:hover:not(:disabled) { background: rgba(229, 72, 77, 0.12); color: #d13b40; }
+#btnClear:active:not(:disabled) { background: rgba(229, 72, 77, 0.18); }
+#btnClear:disabled { opacity: 0.35; cursor: default; background: transparent; }
+#btnClear:focus-visible { outline: 2px solid #3b82f6; outline-offset: 1px; }
+#btnClear svg { display: block; }
 
 /* 画布区 */
 #canvasWrap {
@@ -301,20 +337,37 @@ button {
     top: 8px;
     right: 6px;
     z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: 24px;
     height: 24px;
     padding: 0;
     border: 1px solid #e3e7ee;
     border-radius: 7px;
-    font-size: 15px;
-    font-weight: 600;
-    line-height: 1;
     color: #3f4652;
     background: #ffffff;
 }
 
 .style-toggle:hover { background: #eef1f6; color: #1f2329; }
 .style-toggle:focus-visible { outline: 2px solid #3b82f6; outline-offset: 1px; }
+
+/* 箭头用伪元素绘制：尺寸可控，且旋转后微调位移让箭头（轴对齐外框）中心落在按钮中心
+   （transform 由右向左生效：先 rotate 再 translateX） */
+.style-toggle::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-left: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    border-radius: 1px;
+    transform: translateX(2.5px) rotate(45deg);
+    transition: transform 0.18s ease;
+}
+
+#stylebar.collapsed .style-toggle::before {
+    transform: translateX(-2.5px) rotate(-135deg);
+}
 
 /* 首个分区标题给折叠按钮留出位置，避免长标题被压住 */
 .sb-scroll > .sec:first-child .sec-title { padding-right: 32px; }

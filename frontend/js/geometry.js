@@ -195,6 +195,23 @@
         return inOuter && !inInner;
     }
 
+    // 图形内部命中（忽略填充）：无填充时点内部也算命中，供双击编辑文字使用
+    function hitInside(s, wx, wy, getShape) {
+        const b = boundsOf(s, getShape);
+        if (s.type === 'arrow' || s.type === 'draw') return false;
+        if (s.type === 'text') {
+            return wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h;
+        }
+        const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+        if (s.type === 'ellipse') {
+            return ((wx - cx) / (b.w / 2)) ** 2 + ((wy - cy) / (b.h / 2)) ** 2 <= 1;
+        }
+        if (s.type === 'diamond') {
+            return Math.abs(wx - cx) / (b.w / 2) + Math.abs(wy - cy) / (b.h / 2) <= 1;
+        }
+        return wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h;
+    }
+
     // ---------- 箭头 ----------
     // 射线与包围盒边界交点
     function borderPoint(s, tx, ty, getShape) {
@@ -371,18 +388,20 @@
     }
 
     // 箭头几何：线段（末端回退避免穿透箭头）+ 箭头三角形
+    // 箭头长度按线宽等比放大（约 4.5 倍），避免粗线时段头又短又小、与图形不成比例
     function arrowHead(pts, sw) {
         const last = pts[pts.length - 1];
         const prev = pts[pts.length - 2] || last;
         const dLen = Math.hypot(last.x - prev.x, last.y - prev.y) || 1;
         const ux = (last.x - prev.x) / dLen, uy = (last.y - prev.y) / dLen;
-        const headLen = Math.max(9, sw * 3);
+        const headLen = Math.max(12, sw * 4.5);
+        const halfW = headLen * 0.45;
         const back = Math.min(headLen * 0.8, dLen / 2);
         return {
             shaft: pts.slice(0, -1).concat([{ x: last.x - ux * back, y: last.y - uy * back }]),
             tip: last,
-            left: { x: last.x - ux * headLen - uy * headLen * 0.45, y: last.y - uy * headLen + ux * headLen * 0.45 },
-            right: { x: last.x - ux * headLen + uy * headLen * 0.45, y: last.y - uy * headLen - ux * headLen * 0.45 },
+            left: { x: last.x - ux * headLen - uy * halfW, y: last.y - uy * headLen + ux * halfW },
+            right: { x: last.x - ux * headLen + uy * halfW, y: last.y - uy * headLen - ux * halfW },
         };
     }
 
@@ -468,7 +487,7 @@
     window.Geom = {
         STROKE, FONT, LINE_H, PAD, MIN_SIZE, FAMILIES,
         uid, fontStack, fontFor, textMetrics, normRect, inflate, center, union, rectsIntersect,
-        textLayout, labelLayout, boundsOf, hitShape, hitRoute, distToSeg,
+        textLayout, labelLayout, boundsOf, hitShape, hitInside, hitRoute, distToSeg,
         borderPoint, arrowRoute, arrowHead, portsOf, portOf, portNormal, isHorizPort,
         moveShape, mapper, scaleShape,
         handles, handleAt, resizeBox, simplify, boundsOfPoints,

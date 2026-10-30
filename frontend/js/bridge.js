@@ -52,7 +52,7 @@
                 return { ok: true };
             }
             case 'app_info':
-                return { ok: true, version: '1.0.0' };
+                return { ok: true, version: '1.0.1' };
             case 'set_title':
                 document.title = args.title || 'StepDraw';
                 return { success: true };

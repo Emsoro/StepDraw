@@ -45,18 +45,33 @@
         const p0 = Render.w2s(b.x, b.y, cam);
         const isText = s.type === 'text';
         const size = Geom.FONT[s.props.font] || 24;
+        const z = cam.z;
+        const lineH = size * Geom.LINE_H * z;
+        // 画布文字从“字体上行线”开始，而 textarea 的内容区顶部 = 边框 + padding + 半行距；
+        // 用字体度量把 padding 换算回去，让编辑框里的文字/光标与画布绘制位置重合
+        // （否则光标会比字形偏高，字号越大、字体行距比越小越明显）
+        const met = Geom.textMetrics(s.props);
+        const halfLead = Math.max(0, (lineH - (met.ascent + met.descent) * z) / 2);
 
         editor.value = s.label || '';
         editor.style.display = 'block';
         editor.style.left = p0.x + 'px';
         editor.style.top = p0.y + 'px';
-        editor.style.width = Math.max(60, b.w * cam.z) + 'px';
-        editor.style.height = Math.max(size * 1.6, b.h * cam.z) + 'px';
-        editor.style.font = '500 ' + (size * cam.z) + 'px ' + Geom.fontStack(s.props);
-        editor.style.lineHeight = (size * Geom.LINE_H * cam.z) + 'px';
+        editor.style.width = (isText ? s.w * z : Math.max(60, b.w * z)) + 'px';
+        editor.style.height = Math.max(size * 1.6, b.h * z) + 'px';
+        editor.style.font = '500 ' + (size * z) + 'px ' + Geom.fontStack(s.props);
+        editor.style.lineHeight = lineH + 'px';
         editor.style.color = s.props.stroke || '#1d1d21';
         editor.style.textAlign = isText ? 'left' : 'center';
-        editor.style.paddingTop = isText ? '0px' : Math.max(0, (b.h * cam.z - (Geom.labelLayout(s).textH * cam.z))) / 2 + 'px';
+
+        // 虚线边框的渲染宽度可能被取整（1.5px → 1px），按实际值换算，否则会差半个像素
+        const border = parseFloat(getComputedStyle(editor).borderTopWidth) || 1.5;
+        const textPad = Geom.PAD * size * z - border;   // 画布内边距换算成编辑框 padding
+        const padTop = isText
+            ? Math.max(0, textPad - halfLead)
+            : Math.max(0, (b.h * z - Geom.labelLayout(s).textH * z) / 2 - border);
+        editor.style.paddingTop = padTop + 'px';
+        editor.style.paddingLeft = editor.style.paddingRight = (isText ? Math.max(0, textPad) : 6) + 'px';
         editor.focus();
         editor.select();
     }
@@ -108,7 +123,8 @@
         const s = State.shapes.get(editingId);
         if (!s || s.type !== 'text') return;
         editor.style.height = 'auto';
-        editor.style.height = Math.max(Geom.FONT[s.props.font] * 1.6 * State.camera.z, editor.scrollHeight + 2) + 'px';
+        // box-sizing 为 border-box：scrollHeight 不含 3px 虚线边框，补上避免最后一行被截断
+        editor.style.height = Math.max(Geom.FONT[s.props.font] * 1.6 * State.camera.z, editor.scrollHeight + 4) + 'px';
     });
 
     // ---------- 状态订阅 ----------
@@ -126,7 +142,9 @@
     // ---------- 标题 ----------
     function updateTitle() {
         const title = 'StepDraw — ' + fileName + (State.dirty ? ' •' : '');
-        $('fileName').textContent = fileName + (State.dirty ? ' •' : '');
+        const el = $('fileName');
+        el.textContent = fileName + (State.dirty ? ' •' : '');
+        el.title = filePath || '尚未保存到文件';
         Bridge.invoke('set_title', { title });
     }
 
@@ -249,6 +267,7 @@
         // 撤销/重做按钮
         $('mUndo').disabled = !State.canUndo;
         $('mRedo').disabled = !State.canRedo;
+        $('btnClear').disabled = !State.shapes.size;
 
         // 缩放显示
         $('zoomPct').textContent = Math.round(State.camera.z * 100) + '%';
@@ -319,7 +338,7 @@
         const r = await Bridge.invoke('save_project', { path: filePath, content: docJson() });
         if (r.ok) {
             State.dirty = false;
-            localStorage.removeItem('stepdraw.draft');
+            saveDraft();   // 草稿同时记住文件路径，重启后仍显示文件名
             toast('已保存');
             updateTitle();
         } else if (r.reason !== 'cancel') {
@@ -336,7 +355,7 @@
             filePath = r.path;
             fileName = basename(r.path);
             State.dirty = false;
-            localStorage.removeItem('stepdraw.draft');
+            saveDraft();   // 草稿同时记住文件路径，重启后仍显示文件名
             toast('已保存到 ' + fileName);
             updateTitle();
         }
@@ -407,8 +426,8 @@
         const bar = $('stylebar');
         const btn = $('styleToggle');
         bar.classList.toggle('collapsed', collapsed);
-        btn.textContent = collapsed ? '›' : '‹';
         btn.title = collapsed ? '展开样式面板' : '折叠样式面板';
+        btn.setAttribute('aria-label', btn.title);
         try { localStorage.setItem(STYLEBAR_KEY, collapsed ? '1' : '0'); } catch (_) { /* 存储不可用时忽略 */ }
         // 面板宽度变化后画布尺寸要重算：过渡首帧与结束后各校准一次
         requestAnimationFrame(() => { Render.resize(); requestDraw(); });
@@ -448,6 +467,13 @@
         requestDraw();
     }
 
+    // 一键清空所有图形（保留相机/视图，可 Ctrl+Z 撤销）
+    function clearCanvas() {
+        if (!State.clearShapes()) { toast('画板已经是空的'); return; }
+        localStorage.removeItem('stepdraw.draft');   // 清空后不要让旧草稿在重启时被恢复
+        toast('已清空画布 · Ctrl+Z 可撤销');
+    }
+
     // ---------- 草稿自动保存 ----------
     function scheduleDraft() {
         clearTimeout(draftTimer);
@@ -456,10 +482,13 @@
 
     function saveDraft() {
         try {
-            if (!State.shapes.size) return;
+            if (!State.shapes.size) { localStorage.removeItem('stepdraw.draft'); return; }
             localStorage.setItem('stepdraw.draft', JSON.stringify({
                 shapes: State.exportShapes(),
                 camera: { x: State.camera.x, y: State.camera.y, z: State.camera.z },
+                // 一并记住文件路径与保存状态：重启后标题栏仍显示文件名，Ctrl+S 直接存回原文件
+                path: filePath || '',
+                clean: !State.dirty,
             }));
         } catch (_) { /* 存储不可用时忽略 */ }
     }
@@ -467,19 +496,23 @@
     function loadDraft() {
         try {
             const raw = localStorage.getItem('stepdraw.draft');
-            if (!raw) return false;
+            if (!raw) return null;
             const d = JSON.parse(raw);
-            if (!d || !Array.isArray(d.shapes) || !d.shapes.length) return false;
+            if (!d || !Array.isArray(d.shapes) || !d.shapes.length) return null;
             State.importShapes(d.shapes);
             if (d.camera) {
                 State.camera.x = d.camera.x || 0;
                 State.camera.y = d.camera.y || 0;
                 State.camera.z = Math.min(4, Math.max(0.1, d.camera.z || 1));
             }
-            State.dirty = true;
-            return true;
+            if (d.path) {
+                filePath = d.path;
+                fileName = basename(d.path);
+            }
+            State.dirty = !d.clean;
+            return d;
         } catch (_) {
-            return false;
+            return null;
         }
     }
 
@@ -501,6 +534,7 @@
         if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); Tools.zoomAt(viewCenter().x, viewCenter().y, 1.2); return; }
         if (mod && e.key === '-') { e.preventDefault(); Tools.zoomAt(viewCenter().x, viewCenter().y, 1 / 1.2); return; }
         if (mod && e.key === '0') { e.preventDefault(); Tools.zoomReset(); return; }
+        if (mod && e.shiftKey && e.key === 'Delete') { e.preventDefault(); clearCanvas(); return; }
         if (mod) return;
 
         if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelection(); return; }
@@ -559,6 +593,7 @@
 
         $('mUndo').addEventListener('click', () => State.undo());
         $('mRedo').addEventListener('click', () => State.redo());
+        $('btnClear').addEventListener('click', clearCanvas);
         $('btnDelete').addEventListener('click', deleteSelection);
         $('btnDup').addEventListener('click', duplicateSelection);
 
@@ -614,8 +649,9 @@
         if (!Bridge.isNative) $('envBadge').style.display = 'inline-block';
 
         // 恢复草稿
-        if (loadDraft()) {
-            toast('已恢复上次未保存的草稿');
+        const restored = loadDraft();
+        if (restored) {
+            toast(restored.clean ? '已恢复「' + fileName + '」' : '已恢复上次未保存的草稿');
         }
         updateTitle();
         updateUI();
